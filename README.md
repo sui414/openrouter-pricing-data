@@ -44,6 +44,10 @@ Notes:
   cadence turns them into a time series. Latency in ms, throughput in tokens/s.
 - `model_activity.csv`'s trailing day is partial at scrape time; it is
   overwritten (finalized) by the next day's run.
+- Alias models (slugs starting with `~`, e.g. `~anthropic/claude-fable-latest`)
+  resolve to the same endpoints as their concrete model, so those endpoint rows
+  appear twice per day — dedupe on `endpoint_id` (or drop `~` slugs) when
+  aggregating.
 - Loading a day in pandas:
   `pd.read_csv("data/csv/endpoints/date=2026-07-17.csv")`, or glob all
   partitions and `pd.concat`.
