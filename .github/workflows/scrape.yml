@@ -1,0 +1,36 @@
+name: Daily OpenRouter scrape
+
+on:
+  schedule:
+    - cron: "0 15 * * *"   # 8:00 AM PDT / 7:00 AM PST
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: scrape
+  cancel-in-progress: false
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run scraper
+        run: python3 scraper/scrape.py
+
+      - name: Commit and push data
+        run: |
+          git config user.name "openrouter-scraper[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data
+          if git diff --cached --quiet; then
+            echo "no data changes"
+          else
+            git commit -m "data: $(date -u +%F)"
+            git pull --rebase origin main
+            git push origin main
+          fi
