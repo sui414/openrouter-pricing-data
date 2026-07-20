@@ -5,14 +5,16 @@ GitHub throttles sub-hourly crons to ~1 firing/hour, so (borrowing the trick
 from pluriholonomic/ai-routing) the hourly job stays alive and takes N samples
 at a fixed interval inside a single run:
 
-  every sample (default 11 @ 300s):  OpenRouter perf sweep (cache-busted)
-  every 3rd sample (15-min grain):   vast.ai marketplace aggregates
+  every sample (default 11 @ 300s):  OpenRouter perf+pricing sweep (cache-busted)
+                                     and vast.ai marketplace aggregates
+  (vast churn measured 2026-07-20: ~47% of GPU-type medians moved >0.5% within
+   30 min, so vast is sampled every tick, same 5-min grain as OpenRouter)
 
 Outputs:
   data/csv/perf_5min/date=<d>/run=<HHMM>.csv.gz   all samples of this run
   data/csv/perf_hourly/date=<d>.csv               first sample only (continuity
                                                   with the pre-capture series)
-  data/csv/vast_hourly/date=<d>.csv               via vast_snapshot (appended)
+  data/csv/vast_market/date=<d>.csv               via vast_snapshot (appended)
   data/raw/vast/<d>.jsonl.gz                      via vast_snapshot (first of day)
 
 Usage: capture.py [--samples N] [--interval-seconds S]
@@ -72,11 +74,10 @@ def main():
                     w.writeheader()
                 w.writerows(rows)
             perf_snapshot.gzip_completed_days(outdir, fname)
-        if i % 3 == 0:
-            try:
-                vast_snapshot.main()
-            except Exception as e:
-                print(f"  vast sample failed: {e}", flush=True)
+        try:
+            vast_snapshot.main()
+        except Exception as e:
+            print(f"  vast sample failed: {e}", flush=True)
         if i < args.samples - 1:
             time.sleep(max(0.0, args.interval_seconds - (time.time() - tick)))
 

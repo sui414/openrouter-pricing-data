@@ -5,7 +5,7 @@ Sweeps all live offers (on-demand + interruptible/bid) via the unauthenticated
 search API, paginating with a dph_total price cursor (server caps 64 offers per
 response). Writes:
 
-  data/csv/vast_hourly/date=<utc-date>.csv   per-GPU-type hourly aggregates (appended)
+  data/csv/vast_market/date=<utc-date>.csv   per-GPU-type aggregates (appended per sample)
   data/raw/vast/<utc-date>.jsonl.gz          full trimmed offers, once per day
                                              (first run of the day)
 
@@ -146,7 +146,7 @@ def main():
             rec["scraped_at"] = scraped_at
             raw_out.append(rec)
 
-    outdir = DATA / "csv" / "vast_hourly"
+    outdir = DATA / "csv" / "vast_market"
     outdir.mkdir(parents=True, exist_ok=True)
     fname = f"date={date}.csv"
     outfile = outdir / fname

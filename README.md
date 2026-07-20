@@ -14,9 +14,9 @@ data to this repo; `git pull` is the only sync needed.
 
 | Job | Schedule (UTC) | Script | What it collects |
 |---|---|---|---|
-| Daily sweep | `0 15 * * *` ([scrape.yml](.github/workflows/scrape.yml)) | [scrape.py](scraper/scrape.py) | Full OpenRouter catalog: every model × variant × provider endpoint |
-| | | [ornn_snapshot.py](scraper/ornn_snapshot.py) | ORNN GPU + token price indices |
-| Hourly capture | `30 * * * *` ([hourly.yml](.github/workflows/hourly.yml)) | [capture.py](scraper/capture.py) | 11 samples @ 5-min spacing: OpenRouter endpoint perf/pricing; every 3rd sample: vast.ai GPU marketplace |
+| Daily sweep | cron `0 15 * * *`, daily ([scrape.yml](.github/workflows/scrape.yml)) | [scrape.py](scraper/scrape.py) | Full OpenRouter catalog: every model × variant × provider endpoint |
+| ORNN indices | same daily run, step 2 of scrape.yml | [ornn_snapshot.py](scraper/ornn_snapshot.py) | ORNN GPU + token price index histories (upserted daily) |
+| Hourly capture | cron `30 * * * *`, ~55-min run ([hourly.yml](.github/workflows/hourly.yml)) | [capture.py](scraper/capture.py) | 11 samples @ 5-min spacing, each sweeping **both** OpenRouter endpoint performance **and live prices/discounts**, plus the vast.ai GPU offer book |
 | Route probes | parked | [docs/probe-panel-plan.md](docs/probe-panel-plan.md) | Paid micro-probes measuring billed-vs-quoted price (awaiting API key; design + `$0.50/day` budget approved) |
 
 GitHub cron lags 0–60 min past the nominal time; `scraped_at` timestamps in
@@ -55,10 +55,12 @@ history accumulates beyond the API's own lookback.
 `PUT console.vast.ai/api/v0/search/asks/`, unauthenticated. The server caps
 responses at 64 offers, so each sweep paginates with a `dph_total` price
 cursor until exhaustion (~600 on-demand + ~800 interruptible offers). Sampled
-**every 15 minutes** (inside the hourly capture): per-GPU-type aggregates
+**every 5 minutes** (each tick of the hourly capture): per-GPU-type aggregates
 (min/p25/median/p75/max `$/GPU-hr`, offer & GPU counts, by rental type). Full
 per-offer raw dump once daily. Prices are normalized to per-GPU `$/hr`
-(`dph_total / num_gpus`).
+(`dph_total / num_gpus`). Cadence was chosen empirically: ~47% of GPU-type
+median prices moved >0.5% within a 30-minute window (measured 2026-07-20), so
+the offer book is sampled at the same grain as the OpenRouter series.
 
 ### 3. ORNN (curated GPU & token price indices)
 
@@ -89,7 +91,7 @@ data/
 │   ├── model_rankings.csv              # upserted daily; (date, permaslug, variant) token rankings panel
 │   ├── perf_5min/date=*/run=HHMM.csv.gz# 5-min grain; per-endpoint perf + live prices, 11 samples/run, ~24 runs/day
 │   ├── perf_hourly/date=*.csv          # hourly grain (first sample of each run); prior days gzipped in place
-│   ├── vast_hourly/date=*.csv          # 15-min grain; per-GPU-type price aggregates; prior days gzipped in place
+│   ├── vast_market/date=*.csv          # 5-min grain; per-GPU-type price aggregates; prior days gzipped in place
 │   ├── ornn_gpu_index.csv              # upserted daily; (gpu_type, timestamp) index panel
 │   └── ornn_token_index.csv            # upserted daily; (lab, timestamp) index panel
 └── manifest/YYYY-MM-DD.json            # daily run metadata: timing, row counts, failures
@@ -120,7 +122,7 @@ import pandas as pd, glob
 endpoints = pd.concat(pd.read_csv(f) for f in glob.glob("data/csv/endpoints/date=*.csv"))
 perf5 = pd.concat(pd.read_csv(f) for f in glob.glob("data/csv/perf_5min/date=*/run=*.csv.gz"))
 share = pd.read_csv("data/csv/model_rankings.csv")
-gpus = pd.read_csv("data/csv/vast_hourly/date=2026-07-20.csv")
+gpus = pd.read_csv("data/csv/vast_market/date=2026-07-20.csv")
 ```
 
 Manual runs: Actions tab → pick workflow → Run workflow. Local:
