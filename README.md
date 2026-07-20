@@ -4,10 +4,17 @@ Daily scrape of LLM pricing, per-provider economics, performance, and usage data
 from [OpenRouter](https://openrouter.ai), to build a longitudinal dataset for
 analyzing model/provider market share and routing price-execution quality.
 
-Runs daily at **15:00 UTC (8 AM Pacific)** via GitHub Actions
-([scrape.yml](.github/workflows/scrape.yml)); each run commits the day's data.
-Manual run: Actions tab → "Daily OpenRouter scrape" → Run workflow, or locally
-`python3 scraper/scrape.py` (stdlib only, no dependencies).
+Two GitHub Actions jobs (all scripts stdlib-only Python, no dependencies):
+
+- **Daily** at 15:00 UTC (8 AM PT), [scrape.yml](.github/workflows/scrape.yml):
+  full sweep of all ~800 catalog models via `scraper/scrape.py`.
+- **Hourly** at :30, [hourly.yml](.github/workflows/hourly.yml):
+  `scraper/perf_snapshot.py` (origin-fresh performance/pricing per provider
+  endpoint — a `_cb` cache-buster query param bypasses the 5-minute CDN cache)
+  and `scraper/vast_snapshot.py` (vast.ai GPU marketplace snapshot for the
+  GPU-cost correlation leg of the research).
+
+Manual run: Actions tab → pick workflow → Run workflow.
 
 ## Data sources (all unauthenticated JSON APIs, no HTML scraping)
 
@@ -33,7 +40,12 @@ data/
 │   ├── models/date=YYYY-MM-DD.csv            # 1 row per public model: list pricing, context, modality, benchmarks, headliner_json
 │   ├── endpoints/date=YYYY-MM-DD.csv         # 1 row per provider endpoint: prices, discount, quantization, latency/throughput percentiles
 │   ├── effective_pricing/date=YYYY-MM-DD.csv # 1 row per model×provider: effective prices ($/M tokens), cache hit rate, total tokens
-│   └── model_activity.csv                    # long table upserted daily, keyed (permaslug, variant, date)
+│   ├── model_activity.csv                    # long table upserted daily, keyed (permaslug, variant, date)
+│   ├── perf_hourly/date=YYYY-MM-DD.csv       # ~24 hourly snapshots/day: per-endpoint latency/throughput percentiles,
+│   │                                         #   request counts, live prices; prior days gzipped in place
+│   └── vast_hourly/date=YYYY-MM-DD.csv       # hourly per-GPU-type aggregates: $/GPU/hr min/p25/median/p75/max,
+│                                             #   offer + GPU counts, by rental type (on-demand vs interruptible)
+├── raw/vast/YYYY-MM-DD.jsonl.gz  # full trimmed vast.ai offers, one snapshot per day
 └── manifest/YYYY-MM-DD.json   # run metadata: timing, row counts, failures
 ```
 
