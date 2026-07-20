@@ -17,7 +17,7 @@ data to this repo; `git pull` is the only sync needed.
 | Daily sweep | `0 15 * * *` ([scrape.yml](.github/workflows/scrape.yml)) | [scrape.py](scraper/scrape.py) | Full OpenRouter catalog: every model × variant × provider endpoint |
 | | | [ornn_snapshot.py](scraper/ornn_snapshot.py) | ORNN GPU + token price indices |
 | Hourly capture | `30 * * * *` ([hourly.yml](.github/workflows/hourly.yml)) | [capture.py](scraper/capture.py) | 11 samples @ 5-min spacing: OpenRouter endpoint perf/pricing; every 3rd sample: vast.ai GPU marketplace |
-| Route probes | parked | [docs/probe-panel-plan.md](docs/probe-panel-plan.md) | Paid micro-probes measuring billed-vs-quoted price (awaiting API key; design + $0.50/day budget approved) |
+| Route probes | parked | [docs/probe-panel-plan.md](docs/probe-panel-plan.md) | Paid micro-probes measuring billed-vs-quoted price (awaiting API key; design + `$0.50/day` budget approved) |
 
 GitHub cron lags 0–60 min past the nominal time; `scraped_at` timestamps in
 the data are authoritative.
@@ -56,8 +56,8 @@ history accumulates beyond the API's own lookback.
 responses at 64 offers, so each sweep paginates with a `dph_total` price
 cursor until exhaustion (~600 on-demand + ~800 interruptible offers). Sampled
 **every 15 minutes** (inside the hourly capture): per-GPU-type aggregates
-(min/p25/median/p75/max $/GPU-hr, offer & GPU counts, by rental type). Full
-per-offer raw dump once daily. Prices are normalized to per-GPU $/hr
+(min/p25/median/p75/max `$/GPU-hr`, offer & GPU counts, by rental type). Full
+per-offer raw dump once daily. Prices are normalized to per-GPU `$/hr`
 (`dph_total / num_gpus`).
 
 ### 3. ORNN (curated GPU & token price indices)
@@ -65,9 +65,9 @@ per-offer raw dump once daily. Prices are normalized to per-GPU $/hr
 `dashboard.ornnai.com/api/*`, unauthenticated. **Daily grain** (the public
 tier serves daily closes only; intraday params are ignored):
 
-- GPU rental index ($/hr): H100 SXM, H200, A100 SXM4, RTX 5090, B200
+- GPU rental index (`$/hr`): H100 SXM, H200, A100 SXM4, RTX 5090, B200
   (RTX PRO 6000 WS is premium-gated; auto-collected if it opens up)
-- Ornn Token Price Index ($/M tokens): Anthropic, OpenAI, Google, DeepSeek
+- Ornn Token Price Index (`$/M tokens`): Anthropic, OpenAI, Google, DeepSeek
 
 Public history windows are limited (~3 months GPU, ~6 weeks tokens), so both
 are upserted daily into long CSVs that accumulate the unlimited series.
@@ -97,8 +97,9 @@ data/
 
 ## Units & gotchas
 
-- `models` / `endpoints` / `perf_*` prices are **$ per token** (×1e6 = $/M);
-  `effective_pricing` and ORNN token index are already **$ per M tokens**.
+- `models` / `endpoints` / `perf_*` prices are **USD per token** (×1e6 =
+  `$/M tokens`); `effective_pricing` and the ORNN token index are already
+  **USD per M tokens**.
 - Endpoint `discount` is provider-set promotional pricing; listed prices are
   already post-discount (base = price / (1 − discount)).
 - Latency in ms, throughput in tokens/s; percentiles are rolling 30-min
