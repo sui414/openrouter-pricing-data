@@ -45,7 +45,11 @@ data/
 │   │                                         #   request counts, live prices; prior days gzipped in place
 │   └── vast_hourly/date=YYYY-MM-DD.csv       # hourly per-GPU-type aggregates: $/GPU/hr min/p25/median/p75/max,
 │                                             #   offer + GPU counts, by rental type (on-demand vs interruptible)
+│   ├── ornn_gpu_index.csv         # ORNN daily GPU rental index ($/hr): H100 SXM, H200, A100 SXM4, RTX 5090, B200
+│   │                              #   (public API window ~3mo; upserted daily so full history accumulates)
+│   └── ornn_token_index.csv       # ORNN Token Price Index ($/M tok) per lab: anthropic, openai, google, deepseek
 ├── raw/vast/YYYY-MM-DD.jsonl.gz  # full trimmed vast.ai offers, one snapshot per day
+├── raw/ornn/YYYY-MM-DD.json.gz   # raw ORNN index responses
 └── manifest/YYYY-MM-DD.json   # run metadata: timing, row counts, failures
 ```
 
