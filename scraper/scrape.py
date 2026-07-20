@@ -264,6 +264,46 @@ EFFECTIVE_FIELDS = ["scrape_date", "scraped_at", "model_slug", "permaslug", "var
                     "cache_hit_rate", "total_tokens"]
 
 
+RANKINGS_FIELDS = ["date", "model_permaslug", "variant", "total_prompt_tokens",
+                   "total_completion_tokens", "total_native_tokens_reasoning",
+                   "total_native_tokens_cached", "request_count",
+                   "total_tool_calls", "requests_with_tool_call_errors",
+                   "num_media_prompt", "num_media_completion",
+                   "image_output_requests", "last_scraped_at"]
+
+
+def upsert_model_rankings(rankings_rows, scraped_at):
+    """Merge the public rankings token panel (view=month) into one long CSV,
+    keyed by (date, model_permaslug, variant) — market share without auth."""
+    path = DATA / "csv" / "model_rankings.csv"
+    existing = {}
+    if path.exists():
+        with open(path, newline="") as f:
+            for row in csv.DictReader(f):
+                existing[(row["date"], row["model_permaslug"], row["variant"])] = row
+    for r in rankings_rows:
+        date = (r.get("date") or "").split(" ")[0]
+        key = (date, r.get("model_permaslug", ""), r.get("variant", ""))
+        existing[key] = {
+            "date": date, "model_permaslug": r.get("model_permaslug", ""),
+            "variant": r.get("variant", ""),
+            "total_prompt_tokens": r.get("total_prompt_tokens", ""),
+            "total_completion_tokens": r.get("total_completion_tokens", ""),
+            "total_native_tokens_reasoning": r.get("total_native_tokens_reasoning", ""),
+            "total_native_tokens_cached": r.get("total_native_tokens_cached", ""),
+            "request_count": r.get("count", ""),
+            "total_tool_calls": r.get("total_tool_calls", ""),
+            "requests_with_tool_call_errors": r.get("requests_with_tool_call_errors", ""),
+            "num_media_prompt": r.get("num_media_prompt", ""),
+            "num_media_completion": r.get("num_media_completion", ""),
+            "image_output_requests": r.get("image_output_requests", ""),
+            "last_scraped_at": scraped_at,
+        }
+    rows = [existing[k] for k in sorted(existing)]
+    write_csv(path, rows, RANKINGS_FIELDS)
+    return len(rows)
+
+
 ACTIVITY_FIELDS = ["permaslug", "variant", "model_slug", "date",
                    "total_prompt_tokens", "total_completion_tokens",
                    "total_native_tokens_reasoning", "total_native_tokens_cached",
@@ -321,11 +361,14 @@ def main():
     pub = fetch_json("/api/v1/models")["data"]
     catalog = fetch_json("/api/frontend/v1/catalog/models")["data"]
     providers = fetch_json("/api/frontend/v1/all-providers")["data"]
-    print(f"public models: {len(pub)}, catalog models: {len(catalog)}, providers: {len(providers)}")
+    rankings = fetch_json("/api/frontend/v1/rankings/models", {"view": "month"}).get("data") or []
+    print(f"public models: {len(pub)}, catalog models: {len(catalog)}, "
+          f"providers: {len(providers)}, rankings rows: {len(rankings)}")
 
     write_gz_json(raw_dir / "models.json.gz", pub)
     write_gz_json(raw_dir / "catalog.json.gz", catalog)
     write_gz_json(raw_dir / "providers.json.gz", providers)
+    write_gz_json(raw_dir / "rankings.json.gz", rankings)
 
     # enumerate (slug, permaslug, variant) tasks; variants come from public model
     # id suffixes (":free") and from catalog entries (one entry per variant)
@@ -375,6 +418,7 @@ def main():
     effective_rows = build_effective_pricing_rows(stats_records, scrape_date, scraped_at)
     write_csv(csv_dir / "effective_pricing" / part, effective_rows, EFFECTIVE_FIELDS)
     activity_total = upsert_model_activity(stats_records, scraped_at)
+    rankings_total = upsert_model_rankings(rankings, scraped_at)
 
     failures = [{"model_slug": r["model_slug"], "variant": r["variant"], "errors": r["errors"]}
                 for r in stats_records if r["errors"]]
@@ -391,6 +435,7 @@ def main():
             "endpoints_csv_rows": len(endpoint_rows),
             "effective_pricing_csv_rows": len(effective_rows),
             "model_activity_total_rows": activity_total,
+            "model_rankings_total_rows": rankings_total,
             "failures": len(failures),
         },
         "failures": failures,

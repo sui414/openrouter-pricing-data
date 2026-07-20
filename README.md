@@ -8,11 +8,13 @@ Two GitHub Actions jobs (all scripts stdlib-only Python, no dependencies):
 
 - **Daily** at 15:00 UTC (8 AM PT), [scrape.yml](.github/workflows/scrape.yml):
   full sweep of all ~800 catalog models via `scraper/scrape.py`.
-- **Hourly** at :30, [hourly.yml](.github/workflows/hourly.yml):
-  `scraper/perf_snapshot.py` (origin-fresh performance/pricing per provider
-  endpoint — a `_cb` cache-buster query param bypasses the 5-minute CDN cache)
-  and `scraper/vast_snapshot.py` (vast.ai GPU marketplace snapshot for the
-  GPU-cost correlation leg of the research).
+- **Hourly capture** at :30, [hourly.yml](.github/workflows/hourly.yml):
+  GitHub throttles sub-hourly crons, so `scraper/capture.py` stays alive ~55
+  min and takes **11 samples at 5-minute spacing** per run (technique borrowed
+  from [pluriholonomic/ai-routing](https://github.com/pluriholonomic/ai-routing)):
+  every sample sweeps origin-fresh per-endpoint performance/pricing (a `_cb`
+  cache-buster bypasses the 5-minute CDN cache); every 3rd sample (15-min
+  grain) snapshots the vast.ai GPU marketplace.
 
 Manual run: Actions tab → pick workflow → Run workflow.
 
@@ -41,8 +43,11 @@ data/
 │   ├── endpoints/date=YYYY-MM-DD.csv         # 1 row per provider endpoint: prices, discount, quantization, latency/throughput percentiles
 │   ├── effective_pricing/date=YYYY-MM-DD.csv # 1 row per model×provider: effective prices ($/M tokens), cache hit rate, total tokens
 │   ├── model_activity.csv                    # long table upserted daily, keyed (permaslug, variant, date)
-│   ├── perf_hourly/date=YYYY-MM-DD.csv       # ~24 hourly snapshots/day: per-endpoint latency/throughput percentiles,
-│   │                                         #   request counts, live prices; prior days gzipped in place
+│   ├── model_rankings.csv                    # public rankings token panel (rankings/models?view=month), upserted daily,
+│   │                                         #   keyed (date, model_permaslug, variant) — market-share series, no auth
+│   ├── perf_5min/date=YYYY-MM-DD/run=HHMM.csv.gz  # 11 samples @ 5-min spacing per hourly capture run (~24 files/day)
+│   ├── perf_hourly/date=YYYY-MM-DD.csv       # first sample of each capture run (continuity with pre-5min series);
+│   │                                         #   prior days gzipped in place
 │   └── vast_hourly/date=YYYY-MM-DD.csv       # hourly per-GPU-type aggregates: $/GPU/hr min/p25/median/p75/max,
 │                                             #   offer + GPU counts, by rental type (on-demand vs interruptible)
 │   ├── ornn_gpu_index.csv         # ORNN daily GPU rental index ($/hr): H100 SXM, H200, A100 SXM4, RTX 5090, B200

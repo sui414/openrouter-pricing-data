@@ -91,11 +91,8 @@ def gzip_completed_days(dirpath, today_name):
             path.unlink()
 
 
-def main():
-    now = datetime.now(timezone.utc)
-    scraped_at = now.isoformat(timespec="seconds")
-    pairs = active_pairs()
-    print(f"[{scraped_at}] perf snapshot for {len(pairs)} model×variant pairs")
+def collect_rows(pairs, scraped_at):
+    """One full sweep: returns (endpoint rows, failures)."""
 
     def fetch(task):
         slug, permaslug, variant = task
@@ -145,6 +142,15 @@ def main():
                     "rate_limited_count": h.get("rateLimited", ""),
                     "status": e.get("status", ""),
                 })
+    return rows, failures
+
+
+def main():
+    now = datetime.now(timezone.utc)
+    scraped_at = now.isoformat(timespec="seconds")
+    pairs = active_pairs()
+    print(f"[{scraped_at}] perf snapshot for {len(pairs)} model×variant pairs")
+    rows, failures = collect_rows(pairs, scraped_at)
 
     outdir = DATA / "csv" / "perf_hourly"
     outdir.mkdir(parents=True, exist_ok=True)

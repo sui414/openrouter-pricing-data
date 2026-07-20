@@ -32,8 +32,12 @@ jobs:
           git add data
           if git diff --cached --quiet; then
             echo "no data changes"
-          else
-            git commit -m "data: $(date -u +%F)"
-            git pull --rebase origin main
-            git push origin main
+            exit 0
           fi
+          git commit -m "data: $(date -u +%F)"
+          for i in 1 2 3; do
+            git pull --rebase origin main && git push origin main && exit 0
+            echo "push attempt $i failed; retrying"
+            sleep 10
+          done
+          exit 1

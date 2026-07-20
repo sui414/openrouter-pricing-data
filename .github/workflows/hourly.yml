@@ -1,29 +1,34 @@
 name: Hourly snapshots
+# GitHub throttles sub-hourly crons to ~1 firing/hour, so each hourly run
+# takes 11 samples at 5-min spacing inside one ~55-min job (trick borrowed
+# from pluriholonomic/ai-routing). scraped_at in the data is authoritative;
+# hour-boundary gaps from delayed cron starts are expected and fine.
 
 on:
   schedule:
     - cron: "30 * * * *"   # offset from the daily 15:00 job
   workflow_dispatch:
+    inputs:
+      samples:
+        description: "samples this run"
+        default: "11"
 
 permissions:
   contents: write
 
 concurrency:
-  group: scrape            # shared with the daily workflow so pushes never race
+  group: capture           # daily scrape has its own group; pushes use rebase+retry
   cancel-in-progress: false
 
 jobs:
   snapshot:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 70
     steps:
       - uses: actions/checkout@v4
 
-      - name: OpenRouter perf snapshot
-        run: python3 scraper/perf_snapshot.py
-
-      - name: vast.ai GPU market snapshot
-        run: python3 scraper/vast_snapshot.py
+      - name: Capture (OpenRouter perf 5-min + vast.ai 15-min)
+        run: python3 scraper/capture.py --samples "${{ github.event.inputs.samples || '11' }}" --interval-seconds 300
 
       - name: Commit and push data
         run: |
@@ -32,8 +37,12 @@ jobs:
           git add data
           if git diff --cached --quiet; then
             echo "no data changes"
-          else
-            git commit -m "hourly: $(date -u '+%F %H:%M')"
-            git pull --rebase origin main
-            git push origin main
+            exit 0
           fi
+          git commit -m "capture: $(date -u '+%F %H:%M')"
+          for i in 1 2 3; do
+            git pull --rebase origin main && git push origin main && exit 0
+            echo "push attempt $i failed; retrying"
+            sleep 10
+          done
+          exit 1
