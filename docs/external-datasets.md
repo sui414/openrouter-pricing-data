@@ -33,6 +33,16 @@ afhubbard — keep as a cross-check for posted (non-marketplace) prices.
 - `ArtificialAnalysis/*` — eval benchmark datasets, not price series (we get
   their model-quality indices via OpenRouter's models API already).
 
+## Local-only (license-restricted — never commit)
+
+- **vast.ai public pricing feeds** (`storage.googleapis.com/vast-public-gpu-pricing/`):
+  `gpu-price-history.json` (DEPRECATED: 95 GPUs, ~4-hour grain, 2026-01-28 →,
+  with available/rented/**utilization**) and `gpu-pricing-public.json` (90-day
+  daily medians). License: display/citation with attribution only —
+  redistribution or index/derivative use requires a data license
+  (data@vast.ai). Snapshotted 2026-07-27 into `data-external/vast-history/`
+  (gitignored). Attribute "Source: vast.ai" wherever displayed.
+
 ## Blocked
 
 - `t4run/openrouter-market-history` — friend's 5-min OpenRouter panel
