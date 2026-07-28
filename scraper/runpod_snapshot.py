@@ -24,39 +24,60 @@ from pathlib import Path
 URL = "https://api.runpod.io/graphql"
 QUERY_PUBLIC = "query { gpuTypes { id displayName memoryInGb securePrice communityPrice } }"
 QUERY_AUTH = ("query { gpuTypes { id displayName memoryInGb securePrice communityPrice "
+              "oneWeekPrice oneMonthPrice threeMonthPrice sixMonthPrice clusterPrice "
               "lowestPrice(input:{gpuCount:1}) { minimumBidPrice uninterruptablePrice stockStatus } } }")
+QUERY_DCS = "query { dataCenters { id gpuAvailability { available gpuTypeId } } }"
 RETRIES = 3
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA = ROOT / "data"
 FIELDS = ["date", "gpu_id", "display_name", "memory_gb",
           "secure_price", "community_price",
-          "spot_bid_floor", "on_demand_floor", "stock_status", "scraped_at"]
+          "spot_bid_floor", "on_demand_floor", "stock_status",
+          "price_1wk", "price_1mo", "price_3mo", "price_6mo", "price_cluster",
+          "available_dcs", "listed_dcs", "scraped_at"]
 
 
-def fetch():
-    key = os.environ.get("RUNPOD_API_KEY", "").strip()
+def _gql(query, key):
     headers = {"User-Agent": "Mozilla/5.0", "Content-Type": "application/json"}
     if key:
         headers["Authorization"] = "Bearer " + key
-    body = json.dumps({"query": QUERY_AUTH if key else QUERY_PUBLIC}).encode()
+    body = json.dumps({"query": query}).encode()
     last_err = None
     for attempt in range(RETRIES):
         try:
             req = urllib.request.Request(URL, data=body, method="POST", headers=headers)
             with urllib.request.urlopen(req, timeout=30) as r:
-                return json.load(r)["data"]["gpuTypes"]
+                return json.load(r)["data"]
         except Exception as e:
             last_err = type(e)(str(e)[:200])  # never propagate request internals
             time.sleep(2 ** attempt)
     raise last_err
 
 
+def fetch():
+    key = os.environ.get("RUNPOD_API_KEY", "").strip()
+    gpus = _gql(QUERY_AUTH if key else QUERY_PUBLIC, key)["gpuTypes"]
+    breadth = {}
+    if key:
+        try:
+            for dc in _gql(QUERY_DCS, key)["dataCenters"] or []:
+                for ga in dc.get("gpuAvailability") or []:
+                    gid = ga.get("gpuTypeId")
+                    if not gid:
+                        continue
+                    a, t = breadth.get(gid, (0, 0))
+                    breadth[gid] = (a + (1 if ga.get("available") else 0), t + 1)
+        except Exception as e:
+            print(f"datacenter breadth query failed (non-fatal): {e}")
+    return gpus, breadth
+
+
 def main():
     now = datetime.now(timezone.utc)
     scraped_at = now.isoformat(timespec="seconds")
     date = now.strftime("%Y-%m-%d")
-    gpus = fetch()
+    gpus, breadth = fetch()
 
     rawdir = DATA / "raw" / "runpod"
     rawdir.mkdir(parents=True, exist_ok=True)
@@ -72,13 +93,18 @@ def main():
                 rows[(row["date"], row["gpu_id"])] = row
     for g in gpus:
         lp = g.get("lowestPrice") or {}
+        a, t = breadth.get(g["id"], ("", ""))
         rows[(date, g["id"])] = {
             "date": date, "gpu_id": g["id"], "display_name": g.get("displayName", ""),
             "memory_gb": g.get("memoryInGb", ""), "secure_price": g.get("securePrice", ""),
             "community_price": g.get("communityPrice", ""),
             "spot_bid_floor": lp.get("minimumBidPrice", ""),
             "on_demand_floor": lp.get("uninterruptablePrice", ""),
-            "stock_status": lp.get("stockStatus", ""), "scraped_at": scraped_at}
+            "stock_status": lp.get("stockStatus", ""),
+            "price_1wk": g.get("oneWeekPrice") or "", "price_1mo": g.get("oneMonthPrice") or "",
+            "price_3mo": g.get("threeMonthPrice") or "", "price_6mo": g.get("sixMonthPrice") or "",
+            "price_cluster": g.get("clusterPrice") or "",
+            "available_dcs": a, "listed_dcs": t, "scraped_at": scraped_at}
     with open(path, "w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=FIELDS)
         w.writeheader()
