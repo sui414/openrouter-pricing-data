@@ -27,6 +27,8 @@ jobs:
 
       - name: RunPod posted prices
         run: python3 scraper/runpod_snapshot.py
+        env:
+          RUNPOD_API_KEY: ${{ secrets.RUNPOD_API_KEY }}
 
       - name: Commit and push data
         run: |
