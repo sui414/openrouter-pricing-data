@@ -34,6 +34,7 @@ DATA = ROOT / "data"
 FIELDS = ["date", "gpu_id", "display_name", "memory_gb",
           "secure_price", "community_price",
           "spot_bid_floor", "on_demand_floor", "stock_status",
+          "stock_2x", "stock_4x", "stock_8x",
           "price_1wk", "price_1mo", "price_3mo", "price_6mo", "price_cluster",
           "available_dcs", "listed_dcs", "scraped_at"]
 
@@ -58,6 +59,19 @@ def _gql(query, key):
 def fetch():
     key = os.environ.get("RUNPOD_API_KEY", "").strip()
     gpus = _gql(QUERY_AUTH if key else QUERY_PUBLIC, key)["gpuTypes"]
+    # depth ladder: availability degrades with requested GPU count; the counts
+    # field itself is unpopulated upstream, so stockStatus at 2/4/8 GPUs is the
+    # free book-depth proxy
+    ladder = {}
+    if key:
+        for count in (2, 4, 8):
+            try:
+                q = ("query { gpuTypes { id lowestPrice(input:{gpuCount:%d}) "
+                     "{ stockStatus } } }" % count)
+                for g in _gql(q, key)["gpuTypes"]:
+                    ladder.setdefault(g["id"], {})[count] = (g.get("lowestPrice") or {}).get("stockStatus") or ""
+            except Exception as e:
+                print(f"depth ladder x{count} failed (non-fatal): {e}")
     breadth = {}
     if key:
         try:
@@ -70,14 +84,14 @@ def fetch():
                     breadth[gid] = (a + (1 if ga.get("available") else 0), t + 1)
         except Exception as e:
             print(f"datacenter breadth query failed (non-fatal): {e}")
-    return gpus, breadth
+    return gpus, breadth, ladder
 
 
 def main():
     now = datetime.now(timezone.utc)
     scraped_at = now.isoformat(timespec="seconds")
     date = now.strftime("%Y-%m-%d")
-    gpus, breadth = fetch()
+    gpus, breadth, ladder = fetch()
 
     rawdir = DATA / "raw" / "runpod"
     rawdir.mkdir(parents=True, exist_ok=True)
@@ -101,6 +115,9 @@ def main():
             "spot_bid_floor": lp.get("minimumBidPrice", ""),
             "on_demand_floor": lp.get("uninterruptablePrice", ""),
             "stock_status": lp.get("stockStatus", ""),
+            "stock_2x": ladder.get(g["id"], {}).get(2, ""),
+            "stock_4x": ladder.get(g["id"], {}).get(4, ""),
+            "stock_8x": ladder.get(g["id"], {}).get(8, ""),
             "price_1wk": g.get("oneWeekPrice") or "", "price_1mo": g.get("oneMonthPrice") or "",
             "price_3mo": g.get("threeMonthPrice") or "", "price_6mo": g.get("sixMonthPrice") or "",
             "price_cluster": g.get("clusterPrice") or "",
