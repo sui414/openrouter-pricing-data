@@ -1,0 +1,19 @@
+{
+ "scrape_date": "2026-07-31",
+ "started_at": "2026-07-31T16:46:46+00:00",
+ "finished_at": "2026-07-31T16:47:44+00:00",
+ "duration_seconds": 58.2,
+ "counts": {
+  "public_models": 337,
+  "catalog_models": 864,
+  "providers": 80,
+  "tasks": 864,
+  "models_csv_rows": 337,
+  "endpoints_csv_rows": 1114,
+  "effective_pricing_csv_rows": 1490,
+  "model_activity_total_rows": 18544,
+  "model_rankings_total_rows": 5225,
+  "failures": 0
+ },
+ "failures": []
+}
